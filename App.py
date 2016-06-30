@@ -11,6 +11,7 @@ NUM_CLASSES = 10
 # The MNIST images are always 28x28 pixels.
 IMAGE_SIZE = 28
 IMAGE_PIXELS = IMAGE_SIZE * IMAGE_SIZE
+BATCH_SIZE = 100
 
 Datasets = collections.namedtuple('Datasets', ['train', 'validation', 'test'])
 
@@ -84,6 +85,42 @@ def run_training():
 	test = DataSet(test_images, test_labels, dtype=dtypes.float32)
 	data_sets = Datasets(train=train, validation=validation, test=test)
 
+	with tf.Graph().as_default():
+		# Generate placeholders for the images and labels.
+		images_placeholder = tf.placeholder(tf.float32, shape=(BATCH_SIZE, IMAGE_PIXELS) )
+		labels_placeholder = tf.placeholder(tf.int32, shape=(BATCH_SIZE))
+
+		# Build a Graph that computes predictions from the inference model.
+		logits = inference(images_placeholder, 3, [128,32,10], ['hidden1','hidden2','softmax_linear'])
+
+		# Add to the Graph the Ops for loss calculation.
+		loss = Loss(logits, labels_placeholder)
+
+		# Add to the Graph the Ops that calculate and apply gradients.
+		train_op = training(loss, 0.01)
+
+		# Add the Op to compare the logits to the labels during evaluation.
+		eval_correct = evaluation(logits, labels_placeholder)
+
+		# Build the summary operation based on the TF collection of Summaries.
+		summary_op = tf.merge_all_summaries()
+
+		# Add the variable initializer Op.
+		init = tf.initialize_all_variables()
+
+		# Create a saver for writing training checkpoints.
+		saver = tf.train.Saver()
+
+		# Create a session for running Ops on the Graph.
+		sess = tf.Session()
+
+		# Instantiate a SummaryWriter to output summaries and the Graph.
+		summary_writer = tf.train.SummaryWriter('data', sess.graph)
+		
+		# And then after everything is built:
+		# Run the Op to initialize the variables.
+		sess.run(init)
+
 # reads 32 bits from a binary file
 def _read32(bytestream):
   dt = numpy.dtype(numpy.uint32).newbyteorder('>')
@@ -102,27 +139,28 @@ def inference(inputData, numberOfLayers, sizeOfLayer, nameOfLayer):
   	"""
   	layersDict = []
   	#  InputLayer
-  	with tf.name_scope(nameOfLayer[numberOfLayers]):
+  	with tf.name_scope(nameOfLayer[0]):
 		weights = tf.Variable( tf.truncated_normal([IMAGE_PIXELS, sizeOfLayer[0]], stddev=1.0 / math.sqrt(float(IMAGE_PIXELS))), name='weights' )
 		biases = tf.Variable( tf.zeros([sizeOfLayer[0]]), name='biases' )
 		layersDict.append(tf.nn.relu(tf.matmul(inputData, weights) + biases))
 
   	#  Middle Layers
 	for i in range(1,numberOfLayers-1):
-		with tf.nameScope(nameOfLayer[i]):
+		with tf.name_scope(nameOfLayer[i]):
 				weights = tf.Variable( tf.truncated_normal([sizeOfLayer[i-1], sizeOfLayer[i]], stddev=1.0 / math.sqrt(float(sizeOfLayer[i-1]))), name='weights' )
 				biases = tf.Variable( tf.zeros([sizeOfLayer[i]]), name='biases' )
 				layersDict.append(tf.nn.relu(tf.matmul(layersDict[i-1], weights) + biases))
 
 	# Output
-  	with tf.name_scope(nameOfLayer[numberOfLayers]):
-		weights = tf.Variable( tf.truncated_normal([sizeOfLayer[numberOfLayers-1], NUM_CLASSES], stddev=1.0 / math.sqrt(float(sizeOfLayer[numberOfLayers-1]))), name='weights')
+  	with tf.name_scope(nameOfLayer[numberOfLayers-1]):
+		weights = tf.Variable( tf.truncated_normal([sizeOfLayer[numberOfLayers-2], NUM_CLASSES], stddev=1.0 / math.sqrt(float(sizeOfLayer[numberOfLayers-2]))), name='weights')
 		biases = tf.Variable(tf.zeros([NUM_CLASSES]),name='biases')
-		layersDict.append(tf.matmul(layersDict[numberOfLayers-1], weights) + biases)
-	return layersDict[numberOfLayers]
+		layersDict.append(tf.matmul(layersDict[numberOfLayers-2], weights) + biases)
+
+	return layersDict[numberOfLayers-1]
 
 
-def loss(logits, labels):
+def Loss(logits, labels):
 	"""Calculates the loss from the logits and the labels.
 	Args:
 	logits: Logits tensor, float - [batch_size, NUM_CLASSES].
