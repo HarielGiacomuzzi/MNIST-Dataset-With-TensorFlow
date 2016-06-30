@@ -1,0 +1,271 @@
+import tensorflow as tf
+import math
+import numpy
+from tensorflow.python.framework import dtypes
+import collections
+
+# Global Parameters
+# The MNIST dataset has 10 classes, representing the digits 0 through 9.
+NUM_CLASSES = 10
+
+# The MNIST images are always 28x28 pixels.
+IMAGE_SIZE = 28
+IMAGE_PIXELS = IMAGE_SIZE * IMAGE_SIZE
+
+Datasets = collections.namedtuple('Datasets', ['train', 'validation', 'test'])
+
+# Programm Methods
+
+# this method loads the data, creates the graph in memory and executes the training phases
+def run_training():
+	# placeholder variables for loading the files later...
+	train_images = None
+	train_labels = None
+	test_images  = None
+	test_labels  = None
+	# reads the images from the binary file into a 4D numpy uint8 array
+	with open("/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/train-images.idx3-ubyte","rb") as bytestream :
+		print('Loading Images to Memory')
+		magic = _read32(bytestream)
+		if magic != 2051:
+			raise ValueError('Invalid magic number %d in MNIST image file: %s' % (magic, filename))
+		num_images = _read32(bytestream)
+		rows = _read32(bytestream)
+		cols = _read32(bytestream)
+		buf = bytestream.read(rows * cols * num_images)
+		data = numpy.frombuffer(buf, dtype=numpy.uint8)
+		data = data.reshape(num_images, rows, cols, 1)
+		train_images = data
+
+	# reads the labels to the memory
+	with open('/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/train-labels.idx1-ubyte','rb') as bytestream : 
+		print('Loading labels from file')
+		magic = _read32(bytestream)
+		if magic != 2049:
+			raise ValueError('Invalid magic number %d in MNIST image file: %s' % (magic, filename))
+		num_items = _read32(bytestream)
+		buf = bytestream.read(num_items)
+		labels = numpy.frombuffer(buf, dtype=numpy.uint8)
+		train_labels = labels
+
+	# reads the images from the binary file into a 4D numpy uint8 array
+	with open("/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/t10k-images.idx3-ubyte","rb") as bytestream :
+		print('Loading Images to Memory')
+		magic = _read32(bytestream)
+		if magic != 2051:
+			raise ValueError('Invalid magic number %d in MNIST image file: %s' % (magic, filename))
+		num_images = _read32(bytestream)
+		rows = _read32(bytestream)
+		cols = _read32(bytestream)
+		buf = bytestream.read(rows * cols * num_images)
+		data = numpy.frombuffer(buf, dtype=numpy.uint8)
+		data = data.reshape(num_images, rows, cols, 1)
+		test_images = data
+
+	# reads the labels to the memory
+	with open('/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/t10k-labels.idx1-ubyte','rb') as bytestream : 
+		print('Loading labels from file')
+		magic = _read32(bytestream)
+		if magic != 2049:
+			raise ValueError('Invalid magic number %d in MNIST image file: %s' % (magic, filename))
+		num_items = _read32(bytestream)
+		buf = bytestream.read(num_items)
+		labels = numpy.frombuffer(buf, dtype=numpy.uint8)
+		test_labels = labels
+
+	# divides the set of 10K in the middle to validation and traind
+	validation_images = train_images[:5000]
+	validation_labels = train_labels[:5000]
+	train_images = train_images[5000:]
+	train_labels = train_labels[5000:]
+
+	train = DataSet(train_images, train_labels, dtype=dtypes.float32)
+	validation = DataSet(validation_images, validation_labels, dtype=dtypes.float32)
+	test = DataSet(test_images, test_labels, dtype=dtypes.float32)
+	data_sets = Datasets(train=train, validation=validation, test=test)
+
+# reads 32 bits from a binary file
+def _read32(bytestream):
+  dt = numpy.dtype(numpy.uint32).newbyteorder('>')
+  return numpy.frombuffer(bytestream.read(4), dtype=dt)[0]
+
+# This method creates the layers of the network
+def inference(inputData, numberOfLayers, sizeOfLayer, nameOfLayer):
+	"""Build the model up to where it may be used for inference.
+  		Args:
+    		input: Images placeholder, from inputs.  Type: I Don't know, put something you like :)
+    		numberOfLayers: Number of hidden layers. Type: Integer
+    		sizeOfLayer: Size of each hidden layer.  Type: List of Integer
+    		nameOfLayer: Name of each layer          Type: List of Strings
+  		Returns:
+    		softmax_linear: Output tensor with the computed logits.
+  	"""
+  	layersDict = []
+  	#  InputLayer
+  	with tf.name_scope(nameOfLayer[numberOfLayers]):
+		weights = tf.Variable( tf.truncated_normal([IMAGE_PIXELS, sizeOfLayer[0]], stddev=1.0 / math.sqrt(float(IMAGE_PIXELS))), name='weights' )
+		biases = tf.Variable( tf.zeros([sizeOfLayer[0]]), name='biases' )
+		layersDict.append(tf.nn.relu(tf.matmul(inputData, weights) + biases))
+
+  	#  Middle Layers
+	for i in range(1,numberOfLayers-1):
+		with tf.nameScope(nameOfLayer[i]):
+				weights = tf.Variable( tf.truncated_normal([sizeOfLayer[i-1], sizeOfLayer[i]], stddev=1.0 / math.sqrt(float(sizeOfLayer[i-1]))), name='weights' )
+				biases = tf.Variable( tf.zeros([sizeOfLayer[i]]), name='biases' )
+				layersDict.append(tf.nn.relu(tf.matmul(layersDict[i-1], weights) + biases))
+
+	# Output
+  	with tf.name_scope(nameOfLayer[numberOfLayers]):
+		weights = tf.Variable( tf.truncated_normal([sizeOfLayer[numberOfLayers-1], NUM_CLASSES], stddev=1.0 / math.sqrt(float(sizeOfLayer[numberOfLayers-1]))), name='weights')
+		biases = tf.Variable(tf.zeros([NUM_CLASSES]),name='biases')
+		layersDict.append(tf.matmul(layersDict[numberOfLayers-1], weights) + biases)
+	return layersDict[numberOfLayers]
+
+
+def loss(logits, labels):
+	"""Calculates the loss from the logits and the labels.
+	Args:
+	logits: Logits tensor, float - [batch_size, NUM_CLASSES].
+	labels: Labels tensor, int32 - [batch_size].
+	Returns:
+	loss: Loss tensor of type float.
+	"""
+	labels = tf.to_int64(labels)
+	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits( logits, labels, name='xentropy' )
+	loss = tf.reduce_mean(cross_entropy, name='xentropy_mean')
+	return loss
+
+def training(loss, learning_rate):
+	"""Sets up the training Ops.
+	Creates a summarizer to track the loss over time in TensorBoard.
+	Creates an optimizer and applies the gradients to all trainable variables.
+	The Op returned by this function is what must be passed to the
+	`sess.run()` call to cause the model to train.
+	Args:
+	loss: Loss tensor, from loss().
+	learning_rate: The learning rate to use for gradient descent.
+	Returns:
+	train_op: The Op for training.
+	"""
+	# Add a scalar summary for the snapshot loss.
+	tf.scalar_summary(loss.op.name, loss)
+	# Create the gradient descent optimizer with the given learning rate.
+	optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+	# Create a variable to track the global step.
+	global_step = tf.Variable(0, name='global_step', trainable=False)
+	# Use the optimizer to apply the gradients that minimize the loss
+	# (and also increment the global step counter) as a single training step.
+	train_op = optimizer.minimize(loss, global_step=global_step)
+	return train_op
+
+
+def evaluation(logits, labels):
+	"""Evaluate the quality of the logits at predicting the label.
+	Args:
+	logits: Logits tensor, float - [batch_size, NUM_CLASSES].
+	labels: Labels tensor, int32 - [batch_size], with values in the
+	range [0, NUM_CLASSES).
+	Returns:
+	A scalar int32 tensor with the number of examples (out of batch_size)
+	that were predicted correctly.
+	"""
+	# For a classifier model, we can use the in_top_k Op.
+	# It returns a bool tensor with shape [batch_size] that is true for
+	# the examples where the label is in the top k (here k=1)
+	# of all logits for that example.
+	correct = tf.nn.in_top_k(logits, labels, 1)
+	# Return the number of true entries.
+	return tf.reduce_sum(tf.cast(correct, tf.int32))
+
+
+
+# class dataset
+class DataSet(object):
+
+  def __init__(self,
+               images,
+               labels,
+               fake_data=False,
+               one_hot=False,
+               dtype=dtypes.float32):
+    """Construct a DataSet.
+    one_hot arg is used only if fake_data is true.  `dtype` can be either
+    `uint8` to leave the input as `[0, 255]`, or `float32` to rescale into
+    `[0, 1]`.
+    """
+    dtype = dtypes.as_dtype(dtype).base_dtype
+    if dtype not in (dtypes.uint8, dtypes.float32):
+      raise TypeError('Invalid image dtype %r, expected uint8 or float32' %
+                      dtype)
+    if fake_data:
+      self._num_examples = 10000
+      self.one_hot = one_hot
+    else:
+      assert images.shape[0] == labels.shape[0], (
+          'images.shape: %s labels.shape: %s' % (images.shape, labels.shape))
+      self._num_examples = images.shape[0]
+
+      # Convert shape from [num examples, rows, columns, depth]
+      # to [num examples, rows*columns] (assuming depth == 1)
+      assert images.shape[3] == 1
+      images = images.reshape(images.shape[0],
+                              images.shape[1] * images.shape[2])
+      if dtype == dtypes.float32:
+        # Convert from [0, 255] -> [0.0, 1.0].
+        images = images.astype(numpy.float32)
+        images = numpy.multiply(images, 1.0 / 255.0)
+    self._images = images
+    self._labels = labels
+    self._epochs_completed = 0
+    self._index_in_epoch = 0
+
+  @property
+  def images(self):
+    return self._images
+
+  @property
+  def labels(self):
+    return self._labels
+
+  @property
+  def num_examples(self):
+    return self._num_examples
+
+  @property
+  def epochs_completed(self):
+    return self._epochs_completed
+
+  def next_batch(self, batch_size, fake_data=False):
+    """Return the next `batch_size` examples from this data set."""
+    if fake_data:
+      fake_image = [1] * 784
+      if self.one_hot:
+        fake_label = [1] + [0] * 9
+      else:
+        fake_label = 0
+      return [fake_image for _ in xrange(batch_size)], [
+          fake_label for _ in xrange(batch_size)
+      ]
+    start = self._index_in_epoch
+    self._index_in_epoch += batch_size
+    if self._index_in_epoch > self._num_examples:
+      # Finished epoch
+      self._epochs_completed += 1
+      # Shuffle the data
+      perm = numpy.arange(self._num_examples)
+      numpy.random.shuffle(perm)
+      self._images = self._images[perm]
+      self._labels = self._labels[perm]
+      # Start next epoch
+      start = 0
+      self._index_in_epoch = batch_size
+      assert batch_size <= self._num_examples
+    end = self._index_in_epoch
+    return self._images[start:end], self._labels[start:end]
+
+# Main Program
+if __name__ == '__main__':
+	# executes the training steps
+	run_training()
+
+
