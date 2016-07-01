@@ -2,6 +2,7 @@ import tensorflow as tf
 import math
 import numpy
 import time
+import os
 from tensorflow.python.framework import dtypes
 import collections
 
@@ -28,7 +29,7 @@ def run_training():
 	test_images  = None
 	test_labels  = None
 	# reads the images from the binary file into a 4D numpy uint8 array
-	with open("/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/train-images.idx3-ubyte","rb") as bytestream :
+	with open(os.path.abspath("train-images.idx3-ubyte"),"rb") as bytestream :
 		print('Loading Images to Memory')
 		magic = _read32(bytestream)
 		if magic != 2051:
@@ -42,7 +43,8 @@ def run_training():
 		train_images = data
 
 	# reads the labels to the memory
-	with open('/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/train-labels.idx1-ubyte','rb') as bytestream : 
+
+	with open(os.path.abspath("train-labels.idx1-ubyte"),'rb') as bytestream : 
 		print('Loading labels from file')
 		magic = _read32(bytestream)
 		if magic != 2049:
@@ -53,7 +55,8 @@ def run_training():
 		train_labels = labels
 
 	# reads the images from the binary file into a 4D numpy uint8 array
-	with open("/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/t10k-images.idx3-ubyte","rb") as bytestream :
+
+	with open(os.path.abspath("t10k-images.idx3-ubyte"),"rb") as bytestream :
 		print('Loading Images to Memory')
 		magic = _read32(bytestream)
 		if magic != 2051:
@@ -67,7 +70,8 @@ def run_training():
 		test_images = data
 
 	# reads the labels to the memory
-	with open('/Users/harielgiacomuzzi/Desktop/MNIST-Dataset-With-TensorFlow/t10k-labels.idx1-ubyte','rb') as bytestream : 
+
+	with open(os.path.abspath("t10k-labels.idx1-ubyte"),'rb') as bytestream : 
 		print('Loading labels from file')
 		magic = _read32(bytestream)
 		if magic != 2049:
@@ -94,7 +98,7 @@ def run_training():
 		labels_placeholder = tf.placeholder(tf.int32, shape=(BATCH_SIZE))
 
 		# Build a Graph that computes predictions from the inference model.
-		logits = inference(images_placeholder, 5, [256,128,64,32,10], ['hidden1','hidden2','hidden3','hidden4','softmax_linear'])
+		logits = inference(images_placeholder, 7, [784,2500,2000,1500,1000,500,10], ['hidden1','hidden2','hidden3','hidden4','hidden5','hidden6','softmax_linear'])
 
 		# Add to the Graph the Ops for loss calculation.
 		loss = Loss(logits, labels_placeholder)
@@ -119,7 +123,6 @@ def run_training():
 
 		# Instantiate a SummaryWriter to output summaries and the Graph.
 		summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
-		summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph_def)
 
 		# And then after everything is built:
 		# Run the Op to initialize the variables.
