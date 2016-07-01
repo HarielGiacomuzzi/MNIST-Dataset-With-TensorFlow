@@ -13,7 +13,7 @@ NUM_CLASSES = 10
 IMAGE_SIZE = 28
 IMAGE_PIXELS = IMAGE_SIZE * IMAGE_SIZE
 BATCH_SIZE = 100
-MAX_STEPS = 3000
+MAX_STEPS = 10000
 TRAIN_DIR = 'data'
 
 Datasets = collections.namedtuple('Datasets', ['train', 'validation', 'test'])
@@ -94,7 +94,7 @@ def run_training():
 		labels_placeholder = tf.placeholder(tf.int32, shape=(BATCH_SIZE))
 
 		# Build a Graph that computes predictions from the inference model.
-		logits = inference(images_placeholder, 3, [128,32,10], ['hidden1','hidden2','softmax_linear'])
+		logits = inference(images_placeholder, 5, [256,128,64,32,10], ['hidden1','hidden2','hidden3','hidden4','softmax_linear'])
 
 		# Add to the Graph the Ops for loss calculation.
 		loss = Loss(logits, labels_placeholder)
@@ -119,7 +119,8 @@ def run_training():
 
 		# Instantiate a SummaryWriter to output summaries and the Graph.
 		summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
-		
+		summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph_def)
+
 		# And then after everything is built:
 		# Run the Op to initialize the variables.
 		sess.run(init)
@@ -174,14 +175,14 @@ def do_eval(sess,eval_correct,images_placeholder,labels_placeholder,data_set):
 	input_data.read_data_sets().
 	"""
 	# And run one epoch of eval.
-	true_count = 0  # Counts the number of correct predictions.
+	true_count = 0.0  # Counts the number of correct predictions.
 	steps_per_epoch = data_set.num_examples // BATCH_SIZE
 	num_examples = steps_per_epoch * BATCH_SIZE
 	for step in xrange(steps_per_epoch):
 		feed_dict = fill_feed_dict(data_set,images_placeholder,labels_placeholder)
 		true_count += sess.run(eval_correct, feed_dict=feed_dict)
 	precision = true_count / num_examples
-	print('  Num examples: %d  Num correct: %d  Precision @ 1: %0.08f' %(num_examples, true_count, precision))
+	print('  Num examples: %d  Num correct: %d  Precision @ 1: %0.04f' %(num_examples, true_count, precision))
 
 def fill_feed_dict(data_set, images_pl, labels_pl):
 	"""Fills the feed_dict for training the given step.
